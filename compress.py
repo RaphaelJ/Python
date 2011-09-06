@@ -1,10 +1,10 @@
 #! /usr/bin/python3
 
+# Compress and uncompress differents files inside a directory (rar, zip, iso,
+# exe, mdf, sh ...) into 7z with a high compression ratio.
+
 import sys, os, tempfile, subprocess, shutil
 import os.path as path
-
-# Compress differents files inside a directory (rar, zip, iso, exe, sh, ...)
-# into 7z with a high compression ratio.
 
 compression = '7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on'
 extension = '7z'
@@ -30,6 +30,11 @@ def seven_zip(sources, dest):
         Compress sources into dest using 7zip
     """
 
+    if os.path.exists(dest):
+        print("{0} exists. Press Y to erase.".format(dest))
+        if not input() in ('Y', 'y'):
+            raise Exception("Archive already exists.")
+
     command = compression.split(" ") + [dest] + sources
     subprocess.check_call(command)
 
@@ -44,19 +49,20 @@ def compress(sources):
 
     seven_zip(sources, dest)
 
-    source_size = 0
+    sources_size = 0
     for s in sources:
-        source_size += path.getsize(s)
+        sources_size += path.getsize(s)
         
     dest_size = path.getsize(dest)
 
-    gain = source_size - dest_size
+    gain = sources_size - dest_size
 
-    if gain < source_size * min_ratio: # Not enought gain
+    if gain < sources_size * min_ratio: # Not enought gain
         os.unlink(dest)
         return 0
     else:
-        os.unlink(source)
+        for s in sources:
+            os.unlink(s)
         return gain
 
 def recompress_dir(uncompressor, source_archive):
@@ -90,13 +96,13 @@ def rec_compress(root):
 
     def log_success(full_path, gain):
         log.write("{0};{1}\n".format(full_path, gain))
-        print("{0}\n{1} bytes saved\n".format(full_path, gain))
+        print("{0}\t{1:g}Mio saved\n".format(full_path, gain/1024/1024))
         total_gains[0] += gain
     
     for f in os.listdir(root):
         full_path = path.join(root, f)
         if path.isdir(full_path):
-            compress(full_path)
+            rec_compress(full_path)
         elif not full_path in ignore:
             ext = file_extension(full_path)
             size = path.getsize(full_path)
@@ -123,23 +129,18 @@ def process_rar(f):
 
     return gain
 
-def process_mdf(mdf):
-    """ Compress a .mdf with his associed .mds """
-    mds = "{0}.mds".format(file_without_ext(f))
+def process_associed(f, associated):
+    """ Compress a file with his associated files """
 
-    if path.exists(mds):
-        return compress([mdf, mds])
-    else:
-        return compress([mdf])
+    to_compress = [f]
 
-def process_bin(f):
-    """ Compress a .bin with his associed .cue """
-    cue = "{0}.cue".format(file_without_ext(f))
-
-    if path.exists(cue):
-        return compress([f, cue])
-    else:
-        return compress([f])
+    for ext in associated:
+        assoc = "{0}.{1}".format(file_without_ext(f), ext)
+        
+        if path.exists(assoc):
+            to_compress.append(assoc)
+    
+    return compress(to_compress)
 
 targets = {
     # extension: (action, force compression (don't check size))
@@ -150,8 +151,8 @@ targets = {
     "sh": (process_file, False),
     "zip": (process_zip, True),
     "rar": (process_rar, True),
-    "mdf": (process_mdf, False),
-    "bin": (process_bin, False),
+    "mdf": (lambda f: process_associed(f, ['mds']), False),
+    "bin": (lambda f: process_associed(f, ['cue']), False),
 }
 
 if __name__ == '__main__':
@@ -164,17 +165,16 @@ if __name__ == '__main__':
             ignore.append(name)
             total_gains[0] += int(gain)
             
-            print("{0} files already compressed from compress.log".format(
-                    len(ignore)
-            ))
+        print("{0} files already compressed from compress.log".format(
+            len(ignore)
+        ))
     except:
         pass
 
     log = open(path.join(root, 'compress.log'), 'a+')
 
-    print (ignore)
     rec_compress(root)
     
     log.close()
 
-    print("Finished. Gain: {0}Mio".format(total_gains / 1024 / 1024))
+    print("Finished. Gain: {0:g}Mio".format(total_gains[0] / 1024 / 1024))
