@@ -124,8 +124,10 @@ def process_rar(f):
 
     # Remove all *.rXX
     for r in os.listdir(path.dirname(f)):
+        full_path = path.join(path.dirname(f), r)
         if file_extension(r) in ("r{0:0>2}".format(i) for i in range(0, 100)):
-            os.unlink(r)
+            gain -= path.getsize(full_path)
+            os.unlink(full_path)
 
     return gain
 
