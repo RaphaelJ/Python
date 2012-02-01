@@ -34,6 +34,8 @@ def seven_zip(sources, dest):
         print("{0} exists. Press Y to erase.".format(dest))
         if not input() in ('Y', 'y'):
             raise Exception("Archive already exists.")
+        else:
+            os.unlink(dest)
 
     command = compression.split(" ") + [dest] + sources
     subprocess.check_call(command)
@@ -126,7 +128,8 @@ def process_rar(f):
     for r in os.listdir(path.dirname(f)):
         full_path = path.join(path.dirname(f), r)
         if file_extension(r) in ("r{0:0>2}".format(i) for i in range(0, 100)):
-            gain -= path.getsize(full_path)
+            gain += path.getsize(full_path)
+            ignore.append(full_path)
             os.unlink(full_path)
 
     return gain
@@ -141,6 +144,7 @@ def process_associed(f, associated):
         
         if path.exists(assoc):
             to_compress.append(assoc)
+            ignore.append(assoc)
     
     return compress(to_compress)
 
